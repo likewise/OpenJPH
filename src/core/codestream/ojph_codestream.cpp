@@ -3845,7 +3845,8 @@ namespace ojph {
       if (empty)
         return lines;
 
-      //pull from codeblocks
+      // current line number in subband, is reset to zero on new row of codeblocks
+      line_num++;
       if (--cur_line <= 0)
       {
         if (cur_cb_row < num_blocks.h)
@@ -3864,6 +3865,7 @@ namespace ojph {
           size cb_size;
           cb_size.h = cby1 - cby0;
           cur_line = cur_cb_height = (int)cb_size.h;
+          line_num = 0;
           for (ui32 i = 0; i < num_blocks.w; ++i)
           {
             ui32 cbx0 = ojph_max(tbx0, x_lower_bound + i * nominal.w);

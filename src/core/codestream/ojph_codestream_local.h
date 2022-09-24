@@ -351,6 +351,7 @@ namespace ojph {
       ui32 xcb_prime, ycb_prime;
       ui32 cur_cb_row;
       int cur_line;
+      int line_num;
       int cur_cb_height;
       float delta, delta_inv;
       ui32 K_max;
