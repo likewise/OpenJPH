@@ -2244,12 +2244,12 @@ namespace ojph {
           band_rect.org.y = tby0;
           band_rect.siz.w = tbx1 - tbx0;
           band_rect.siz.h = tby1 - tby0;
-          bands[i].finalize_alloc(codestream, band_rect, this, res_num, i);
+          bands[i].finalize_alloc(codestream, band_rect, this, res_num, i, comp_num);
         }
       }
       else {
         this->num_bands = 1;
-        bands[0].finalize_alloc(codestream, res_rect, this, res_num, 0);
+        bands[0].finalize_alloc(codestream, res_rect, this, res_num, 0, comp_num);
       }
 
       //finalize precincts
@@ -3649,7 +3649,7 @@ namespace ojph {
     void subband::finalize_alloc(codestream *codestream,
                                  const rect &band_rect,
                                  resolution* res, ui32 res_num,
-                                 ui32 subband_num)
+                                 ui32 subband_num, ui32 comp_num)
     {
       mem_fixed_allocator* allocator = codestream->get_allocator();
       elastic = codestream->get_elastic_alloc();
@@ -3657,6 +3657,7 @@ namespace ojph {
       this->res_num = res_num;
       this->band_num = subband_num;
       this->band_rect = band_rect;
+      this->comp_num = comp_num;
       this->parent = res;
 
       const param_cod* cdp = codestream->get_cod();

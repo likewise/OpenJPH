@@ -327,7 +327,7 @@ namespace ojph {
       static void pre_alloc(codestream *codestream, const rect& band_rect,
                             ui32 res_num);
       void finalize_alloc(codestream *codestream, const rect& band_rect,
-                          resolution* res, ui32 res_num, ui32 subband_num);
+                          resolution* res, ui32 res_num, ui32 subband_num, ui32 comp_num);
 
       void exchange_buf(line_buf* l);
       line_buf* get_line() { return lines; }
@@ -339,7 +339,7 @@ namespace ojph {
       line_buf* pull_line();
 
     private:
-      ui32 res_num, band_num;
+      ui32 res_num, band_num, comp_num;
       bool reversible;
       bool empty;
       rect band_rect;
