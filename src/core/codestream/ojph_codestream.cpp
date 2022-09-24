@@ -3884,7 +3884,52 @@ namespace ojph {
       //pull from codeblocks
       for (ui32 i = 0; i < num_blocks.w; ++i)
         blocks[i].pull_line(lines + 0);
+#if 0
+      printf("subband::pull_line() cur_cb_row = %u, line_num = %u, res_num = %u, band_num =%u, comp_num =%u, (%u,%u) (+%u, +%u)\n",
+        cur_cb_row - 1, line_num, res_num, band_num, comp_num, band_rect.org.x, band_rect.org.y, band_rect.siz.w, band_rect.siz.h);
+#endif
 
+      {
+        static int file_initialized = 0;
+        static FILE *freqfile = NULL;
+        if (!file_initialized) {
+          freqfile = fopen("/tmp/freq.yuv", "w+");
+          file_initialized = 1;
+          while (freqfile == NULL);
+        } /*else {
+          freqfile = fopen("/tmp/freq.yuv", "w+");
+        }*/
+        int xf = band_num & 1;
+        int yf = band_num >> 1;
+        assert (xf <= 1);
+        assert (yf <= 1);
+        // assuming 1920x1080 4:2:0 8bpp
+        // base offset based on comp_num
+        unsigned int byte_offset = (comp_num > 0) * 1920*1080*3/4 + comp_num * 1920*1080/4;
+        unsigned int stride = comp_num == 0? 1920: 1920/2;
+
+        // cur_cb_height unusable, as we need to know previous cb height(s)
+        unsigned int row = (band_rect.siz.h * yf) + ((cur_cb_row - 1) * 64) + line_num/*within codeblock*/;
+        // additional offset based on row
+        byte_offset += (row * stride);
+        // additional offset based on band
+        byte_offset += (band_rect.siz.w * xf);
+        int rc = fseek(freqfile, byte_offset, SEEK_SET);
+        if (rc < 0) perror("fseek");
+        assert(rc == 0);
+
+        for (ui32 x = 0; x < band_rect.siz.w; x++) {
+          si32 val = lines->i32[x];
+          val += 256;
+          val /= 2;
+          uint8_t small = val;
+          rc = fwrite(&small, 1, 1, freqfile);
+          assert(rc == 1);
+        }
+#if 0        
+        printf("%u, %u, comp_num =%u, row = %u, stride = %u, byte_offset = %u, band_rect.siz.w = %u\n", band_rect.siz.w * xf, (cur_cb_row - 1) * 64 + band_rect.siz.h * yf, comp_num, row, stride, byte_offset, band_rect.siz.w);
+#endif
+      }
       return lines;
     }
 
