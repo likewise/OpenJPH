@@ -190,7 +190,9 @@ int main(int argc, char *argv[]) {
 
 #ifdef OJPH_ENABLE_MODETEST
   void *yu12 = NULL;
-  void *state = hardcoded_setup(&yu12);
+  void *state = NULL;
+  
+  state = hardcoded_setup(&yu12);
   printf("ojph_expand state = %p, YU12 = %p\n", state, yu12);
 #define YU12_HD_SIZE (2048 * 1080)
   void *yu12_dec = malloc(YU12_HD_SIZE);
@@ -353,7 +355,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef OJPH_ENABLE_MODETEST
           // LEON
-          if (0)
+          if (1)
           {
             if ((yu12_dec != NULL) && (c == 0))
             {
@@ -409,7 +411,7 @@ int main(int argc, char *argv[]) {
   }
   if (0) {
     memcpy(yu12, yu12_dec, YU12_HD_SIZE);
-  } else if (0) {
+  } else if (1) {
     uint8_t *src = (uint8_t *)yu12_dec;
     uint8_t *dst = (uint8_t *)yu12;
     for (int i = 0; i < 1080; i++, src+= 2048, dst+=2048)
