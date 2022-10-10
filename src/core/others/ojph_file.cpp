@@ -182,8 +182,10 @@ namespace ojph {
   {
     assert(fh == NULL);
     fh = fopen(filename, "rb");
-    if (fh == NULL)
+    if (fh == NULL) {
+      perror("j2c_infile::open");
       OJPH_ERROR(0x00060002, "failed to open %s for reading", filename);
+    }
   }
 
   ////////////////////////////////////////////////////////////////////////////

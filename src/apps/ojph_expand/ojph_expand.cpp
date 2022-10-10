@@ -47,6 +47,13 @@
 #include "ojph_params.h"
 #include "ojph_message.h"
 
+#ifdef OJPH_ENABLE_MODETEST
+extern "C" {
+#include "modetest.h"
+#include "unistd.h"
+}
+#endif
+
 /////////////////////////////////////////////////////////////////////////////
 struct ui32_list_interpreter : public ojph::cli_interpreter::arg_inter_base
 {
@@ -181,6 +188,16 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
+#ifdef OJPH_ENABLE_MODETEST
+  void *yu12 = NULL;
+  void *state = hardcoded_setup(&yu12);
+  printf("ojph_expand state = %p, YU12 = %p\n", state, yu12);
+#define YU12_HD_SIZE (2048 * 1080)
+  void *yu12_dec = malloc(YU12_HD_SIZE);
+#else
+#error DOJPH_ENABLE_MODETEST not set
+#endif
+
   clock_t begin = clock();
 
   try {
@@ -298,8 +315,10 @@ int main(int argc, char *argv[]) {
         }
         codestream.set_planar(true);
         yuv.configure(max_bit_depth, siz.get_num_components(), comp_widths);
+#ifdef OJPH_ENABLE_MODETEST
         yuv.open(output_filename);
         base = &yuv;
+#endif
       }
       else
 #ifdef OJPH_ENABLE_TIFF_SUPPORT
@@ -320,16 +339,41 @@ int main(int argc, char *argv[]) {
 
     if (codestream.is_planar())
     {
+      //printf("planar\n");
       ojph::param_siz siz = codestream.access_siz();
       for (ojph::ui32 c = 0; c < siz.get_num_components(); ++c)
       {
+        ojph::ui32 width = siz.get_recon_width(c);
         ojph::ui32 height = siz.get_recon_height(c);
-        for (ojph::ui32 i = height; i > 0; --i)
+        for (ojph::ui32 hh = 0; hh < height; hh++)
         {
           ojph::ui32 comp_num;
           ojph::line_buf *line = codestream.pull(comp_num);
           assert(comp_num == c);
-          base->write(line, comp_num);
+
+#ifdef OJPH_ENABLE_MODETEST
+          // LEON
+          if (0)
+          {
+            if ((yu12_dec != NULL) && (c == 0))
+            {
+              uint8_t *dp = (uint8_t *)yu12_dec + hh * 2048;
+              //printf("dp = %p\n", dp);
+              //printf("hh = %d\n", hh);
+              const int32_t *sp = line->i32;
+              //printf("w = %d\n", w);
+              for (uint32_t i = 0; i < width; i = i + 1)
+              {
+                int val = *sp++;
+                val = val >= 0 ? val : 0;
+                val = val <= 255 ? val : 255;
+                *dp++ = (uint8_t)val;
+              }
+            }
+          }
+#else          
+          //base->write(line, comp_num);
+#endif
         }
       }
     }
@@ -345,12 +389,16 @@ int main(int argc, char *argv[]) {
           ojph::line_buf *line = codestream.pull(comp_num);
           assert(comp_num == c);
           base->write(line, comp_num);
+            printf("c=%u, l=%u\n", (unsigned int)c, (unsigned int)i);
         }
       }
     }
 
+#ifndef OJPH_ENABLE_MODETEST
     base->close();
+#endif
     codestream.close();
+
   }
   catch (const std::exception& e)
   {
@@ -359,10 +407,28 @@ int main(int argc, char *argv[]) {
       printf("%s\n", p);
     exit(-1);
   }
+  if (0) {
+    memcpy(yu12, yu12_dec, YU12_HD_SIZE);
+  } else if (0) {
+    uint8_t *src = (uint8_t *)yu12_dec;
+    uint8_t *dst = (uint8_t *)yu12;
+    for (int i = 0; i < 1080; i++, src+= 2048, dst+=2048)
+    {
+      memcpy(dst, src, 1920);
+    }
+  }
 
   clock_t end = clock();
   double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
   printf("Elapsed time = %f\n", elapsed_secs);
+
+  sleep(10);
+#ifdef OJPH_ENABLE_MODETEST
+  printf("state = %p\n", state);
+  teardown(state);
+#else
+#error DOJPH_ENABLE_MODETEST not set
+#endif  
 
   return 0;
 }

@@ -1167,6 +1167,9 @@ namespace ojph {
 
     int max_val = (1<<bit_depth) - 1;
     ui32 w = comp_width[comp_num];
+
+//    return w; // DO NOT WRITE - LEON
+
     if (bit_depth > 8)
     {
       const si32 *sp = line->i32;
