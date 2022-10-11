@@ -24,7 +24,7 @@ set -e
 make -C build -j4
 make -C build -j4 install DESTDIR=/tmp/
 
-INPUT=./tmp/Beauty_1920x1080_420_8bit.%d.yuv
+INPUT=../Beauty/Beauty.%d.ojh
 
 rm -f /tmp/freqfile.yuv
 
@@ -35,7 +35,7 @@ ls -ald $INPUT.ojh || true
 
 #for i in {1..1} #$(seq 1 1 20)
 #do 
-  /tmp/usr/local/bin/ojph_expand -i $INPUT.ojh -o $INPUT.ojh.$i.yuv&
+  /tmp/usr/local/bin/ojph_expand -i $INPUT -o $INPUT.$i.yuv&
 #done
 wait
 END_NS=`date +%s%N`
