@@ -1210,6 +1210,7 @@ namespace ojph {
         for (ui32 i = 0; i < num_tiles.w; ++i)
         {
           ui32 idx = i + cur_tile_row * num_tiles.w;
+          //printf("tile %u, cur_comp = %u\n", idx, cur_comp);
           if ((success &= tiles[idx].pull(lines + cur_comp, cur_comp)) == false)
             break;
         }
@@ -2603,6 +2604,10 @@ namespace ojph {
     //////////////////////////////////////////////////////////////////////////
     line_buf* resolution::pull_line()
     {
+#if 0
+      printf("resolution::pull_line() res_num = %u, res_rect.siz.w = %u, res_rect.siz.h = %u, cur_line = %u\n",
+        res_num, res_rect.siz.w, res_rect.siz.h, cur_line);
+#endif
       if (res_num == 0)
       {
         assert(num_bands == 1 && child_res == NULL);
@@ -2620,24 +2625,35 @@ namespace ojph {
         assert(num_lines >= 4);
         if (res_rect.siz.h > 1)
         {
+          // iterate over 4 lines
           do
           {
             //horizontal transform
+#if 0
+            printf("resolution::pull_line() cur_line = %u, res_rect.siz.h =%u\n", cur_line, res_rect.siz.h);
+#endif
             if (cur_line < res_rect.siz.h)
             {
+#if 0
+              printf("horizontal(res_num = %u, res_rect.siz.w = %u, res_rect.siz.h = %u, width = %u, cur_line = %u, lines = %p)\n",
+                res_num, res_rect.siz.w, res_rect.siz.h, width, cur_line, lines);
+#endif
               if (vert_even)
-                rev_horz_wvlt_bwd_tx(lines,
-                  child_res->pull_line(), bands[1].pull_line(),
+                rev_horz_wvlt_bwd_tx(lines/*dst*/,
+                  child_res/*LL*/->pull_line(), bands[1]/*HL*/.pull_line(),
                   width, horz_even);
               else
-                rev_horz_wvlt_bwd_tx(lines,
-                  bands[2].pull_line(), bands[3].pull_line(),
+                rev_horz_wvlt_bwd_tx(lines/*dst*/,
+                  bands[2]/*LH*/.pull_line(), bands[3]/*HH*/.pull_line(),
                   width, horz_even);
             }
-
             //vertical transform
             if (!vert_even)
             {
+#if 0
+              printf("  vertical(res_num = %u, res_rect.siz.w = %u, res_rect.siz.h = %u, width = %u, cur_line = %u, lines = %p)\n",
+                res_num, res_rect.siz.w, res_rect.siz.h, width, cur_line, lines);
+#endif
               rev_vert_wvlt_bwd_update(
                 cur_line > 1 ? lines + 2 : lines,
                 cur_line < res_rect.siz.h ? lines : lines + 2,
@@ -3842,13 +3858,17 @@ namespace ojph {
     //////////////////////////////////////////////////////////////////////////
     line_buf *subband::pull_line()
     {
+      //printf("subband::pull_line(cur_line = %u)\n", cur_line);
       if (empty)
         return lines;
 
       // current line number in subband, is reset to zero on new row of codeblocks
       line_num++;
+
+      // no more lines? pull from codeblocks
       if (--cur_line <= 0)
       {
+        // any codeblock rows left?
         if (cur_cb_row < num_blocks.h)
         {
           ui32 tbx0 = band_rect.org.x;
@@ -3866,6 +3886,8 @@ namespace ojph {
           cb_size.h = cby1 - cby0;
           cur_line = cur_cb_height = (int)cb_size.h;
           line_num = 0;
+          // iterate over row of codeblocks
+          //printf("subband::pull_line(num_blocks.w = %u) ", num_blocks.w);
           for (ui32 i = 0; i < num_blocks.w; ++i)
           {
             ui32 cbx0 = ojph_max(tbx0, x_lower_bound + i * nominal.w);
@@ -3875,21 +3897,25 @@ namespace ojph {
                                coded_cbs + i + cur_cb_row * num_blocks.w);
             blocks[i].decode();
           }
+          //printf("\n");
           ++cur_cb_row;
         }
       }
 
       assert(cur_line >= 0);
+      assert(cur_cb_row > 0);
 
       //pull from codeblocks
-      for (ui32 i = 0; i < num_blocks.w; ++i)
+      for (ui32 i = 0; i < num_blocks.w; ++i) {
         blocks[i].pull_line(lines + 0);
-#if 0
+      }
+
+#if 1
       printf("subband::pull_line() cur_cb_row = %u, line_num = %u, res_num = %u, band_num =%u, comp_num =%u, (%u,%u) (+%u, +%u)\n",
         cur_cb_row - 1, line_num, res_num, band_num, comp_num, band_rect.org.x, band_rect.org.y, band_rect.siz.w, band_rect.siz.h);
 #endif
 
-      {
+      if (0) {
         static int file_initialized = 0;
         static FILE *freqfile = NULL;
         if (!file_initialized) {
@@ -3909,7 +3935,7 @@ namespace ojph {
         unsigned int stride = comp_num == 0? 1920: 1920/2;
 
         // cur_cb_height unusable, as we need to know previous cb height(s)
-        unsigned int row = (band_rect.siz.h * yf) + ((cur_cb_row - 1) * 64) + line_num/*within codeblock*/;
+        unsigned int row = (band_rect.siz.h * yf) + ((cur_cb_row - 1) * cur_cb_height) + line_num/*within codeblock*/;
         // additional offset based on row
         byte_offset += (row * stride);
         // additional offset based on band
@@ -3925,9 +3951,10 @@ namespace ojph {
           uint8_t small = val;
           rc = fwrite(&small, 1, 1, freqfile);
           assert(rc == 1);
+          fflush(freqfile);
         }
-#if 0        
-        printf("%u, %u, comp_num =%u, row = %u, stride = %u, byte_offset = %u, band_rect.siz.w = %u\n", band_rect.siz.w * xf, (cur_cb_row - 1) * 64 + band_rect.siz.h * yf, comp_num, row, stride, byte_offset, band_rect.siz.w);
+#if 0
+        printf("%u, %u, comp_num =%u, row = %u, stride = %u, byte_offset = %u, band_rect.siz.w = %u\n", band_rect.siz.w * xf, (cur_cb_row - 1) * cur_cb_height + band_rect.siz.h * yf, comp_num, row, stride, byte_offset, band_rect.siz.w);
 #endif
       }
       return lines;
@@ -4175,6 +4202,9 @@ namespace ojph {
                                        float delta, ui32 count)
     {
       ojph_unused(delta);
+      // keep track of highest and lowest value
+      //static si32 max = INT32_MIN;
+      //static si32 min = INT32_MAX;
       ui32 shift = 31 - K_max;
       //convert to sign and magnitude
       si32 *p = (si32*)dp;
@@ -4182,7 +4212,10 @@ namespace ojph {
       {
         ui32 v = *sp++;
         si32 val = (v & 0x7FFFFFFF) >> shift;
-        *p++ = (v & 0x80000000) ? -val : val;
+        val = (v & 0x80000000) ? -val : val;
+        *p++ = val;
+        //if (val < min) { min = val; printf("min = %d\n", min); }
+        //if (val > max) { max = val; printf("max = %d\n", max); }
       }
     }
 
@@ -4204,6 +4237,7 @@ namespace ojph {
     //////////////////////////////////////////////////////////////////////////
     void codeblock::pull_line(line_buf *line)
     {
+      //printf("codeblock::pull_line(line->i32 = %p, line_offset = %u, cur_line = %u)\n", line->i32,line_offset, cur_line);
       si32 *dp = line->i32 + line_offset;
       if (!zero_block)
       {
@@ -4216,6 +4250,5 @@ namespace ojph {
       ++cur_line;
       assert(cur_line <= cb_size.h);
     }
-
   }
 }

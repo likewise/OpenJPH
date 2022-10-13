@@ -84,13 +84,24 @@ namespace ojph {
                                        const line_buf* src2,
                                        line_buf *dst, ui32 repeat);
 
+    void nop_rev_vert_wvlt_bwd_predict(const line_buf* src1,
+                                       const line_buf* src2,
+                                       line_buf *dst, ui32 repeat);
+
     //////////////////////////////////////////////////////////////////////////
     void gen_rev_vert_wvlt_bwd_update(const line_buf* src1,
                                       const line_buf* src2,
                                       line_buf *dst, ui32 repeat);
 
+    void nop_rev_vert_wvlt_bwd_update(const line_buf* src1,
+                                      const line_buf* src2,
+                                      line_buf *dst, ui32 repeat);
+
     //////////////////////////////////////////////////////////////////////////
     void gen_rev_horz_wvlt_bwd_tx(line_buf* dst, line_buf *lsrc,
+                                  line_buf *hsrc, ui32 width, bool even);
+
+    void nop_rev_horz_wvlt_bwd_tx(line_buf* dst, line_buf *lsrc,
                                   line_buf *hsrc, ui32 width, bool even);
 
     //////////////////////////////////////////////////////////////////////////

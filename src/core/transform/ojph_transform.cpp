@@ -180,6 +180,13 @@ namespace ojph {
       irrev_horz_wvlt_bwd_tx    = wasm_irrev_horz_wvlt_bwd_tx;
 #endif // !OJPH_ENABLE_WASM_SIMD
 
+#if defined(OJPH_NOP_BWD_TRANSFORMS)
+#warning Using no-op backward transforms
+      rev_vert_wvlt_bwd_predict = nop_rev_vert_wvlt_bwd_predict;
+      rev_vert_wvlt_bwd_update  = nop_rev_vert_wvlt_bwd_update;
+      rev_horz_wvlt_bwd_tx      = nop_rev_horz_wvlt_bwd_tx;
+#endif // OJPH_NOP_BWD_TRANSFORMS
+
       wavelet_transform_functions_initialized = true;
     }
     
@@ -271,6 +278,18 @@ namespace ojph {
         *dst++ += (*src1++ + *src2++) >> 1;
     }
 
+    void nop_rev_vert_wvlt_bwd_predict(const line_buf* line_src1,
+                                       const line_buf* line_src2,
+                                       line_buf *line_dst, ui32 repeat)
+    {
+#if 0
+      si32 *dst = line_dst->i32;
+      const si32 *src1 = line_src1->i32, *src2 = line_src2->i32;
+      for (ui32 i = repeat; i > 0; --i)
+        *dst++ = *src1++;
+#endif
+    }
+
     //////////////////////////////////////////////////////////////////////////
     void gen_rev_vert_wvlt_bwd_update(const line_buf* line_src1,
                                       const line_buf* line_src2,
@@ -280,6 +299,17 @@ namespace ojph {
       const si32 *src1 = line_src1->i32, *src2 = line_src2->i32;
       for (ui32 i = repeat; i > 0; --i)
         *dst++ -= (2 + *src1++ + *src2++) >> 2;
+    }
+    void nop_rev_vert_wvlt_bwd_update(const line_buf* line_src1,
+                                      const line_buf* line_src2,
+                                      line_buf *line_dst, ui32 repeat)
+    {
+#if 0
+      si32 *dst = line_dst->i32;
+      const si32 *src1 = line_src1->i32, *src2 = line_src2->i32;
+      for (ui32 i = repeat; i > 0; --i)
+        *dst++ = *src2++;
+#endif
     }
 
     //////////////////////////////////////////////////////////////////////////
@@ -295,6 +325,7 @@ namespace ojph {
         const ui32 H_width = (width + (even ? 0 : 1)) >> 1;
 
         // extension
+
         hsrc[-1] = hsrc[0];
         hsrc[H_width] = hsrc[H_width-1];
         //inverse update
@@ -322,6 +353,40 @@ namespace ojph {
           line_dst->i32[0] = line_lsrc->i32[0];
         else
           line_dst->i32[0] = line_hsrc->i32[0] >> 1;
+      }
+    }
+
+    //////////////////////////////////////////////////////////////////////////
+    //// NO-OP (COPY-ONLY) horizontal wavelet transform LEON
+    void nop_rev_horz_wvlt_bwd_tx(line_buf* line_dst, line_buf *line_lsrc,
+                                  line_buf *line_hsrc, ui32 width, bool even)
+    {
+      return;
+      if (width > 1)
+      {
+        si32 *lsrc = line_lsrc->i32, *hsrc = line_hsrc->i32;
+        si32 *dst = line_dst->i32;
+
+        const ui32 L_width = (width + (even ? 1 : 0)) >> 1;
+        const ui32 H_width = (width + (even ? 0 : 1)) >> 1;
+
+        //printf("width = %u, L_width = %u,  H_width = %u\n", width, L_width, H_width);
+
+        si32 *sph = hsrc;
+        si32 *spl = lsrc;
+        si32 *dp = dst;
+        for (ui32 i = L_width + (even ? 0 : 1); i > 0; --i, spl++)
+        {
+          *dp++ = *spl;
+        }
+        for (ui32 i = H_width + (even ? 0 : 1); i > 0; --i, sph++)
+        {
+          *dp++ = *sph;
+        }
+      }
+      else
+      {
+        line_dst->i32[0] = line_lsrc->i32[0];
       }
     }
 
