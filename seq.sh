@@ -20,11 +20,11 @@ set -e
 #exit
 
 #rm -rf build
-#cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DOJPH_ENABLE_MODETEST=ON #-DOJPH_NOP_BWD_TRANSFORMS=ON
 make -C build -j4
 make -C build -j4 install DESTDIR=/tmp/
 
-INPUT=../Beauty/Beauty.%d.ojh
+INPUT=../Sequence/%d.ojh
 
 rm -f /tmp/freqfile.yuv
 
@@ -33,11 +33,8 @@ BEGIN_NS=`date +%s%N`
 
 ls -ald $INPUT.ojh || true
 
-#for i in {1..1} #$(seq 1 1 20)
-#do 
-  /tmp/usr/local/bin/ojph_expand -i $INPUT -o $INPUT.$i.yuv&
-#done
-wait
+/tmp/usr/local/bin/ojph_expand -i $INPUT -o /tmp/x.yuv
+
 END_NS=`date +%s%N`
 
 echo $BEGIN_NS
