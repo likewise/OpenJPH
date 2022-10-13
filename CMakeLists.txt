@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10.0)
 
-project (openjph DESCRIPTION "Open source implementation of JPH" LANGUAGES CXX)
+project (openjph DESCRIPTION "Open source implementation of JPH" LANGUAGES C CXX)
 
 ################################################################################################
 # Building OpenJPH
@@ -30,6 +30,8 @@ option(BUILD_SHARED_LIBS "Shared Libraries" OFF)
 option(OJPH_ENABLE_TIFF_SUPPORT "Enables input and output support for TIFF files" OFF)
 option(OJPH_BUILD_TEST "Enables building test code" OFF)
 
+option(OJPH_ENABLE_MODETEST "Output to screen using modified modetest" OFF)
+option(OJPH_NOP_BWD_TRANSFORMS "Disables backward wavelet transfers" OFF)
 
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release")
@@ -42,6 +44,16 @@ if (MSVC)
 endif()
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -Wall -Wextra -Wconversion -Wunused-parameter")
+endif()
+
+if (OJPH_ENABLE_MODETEST)
+	if (MSVC)
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D \"OJPH_ENABLE_MODETEST\"")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D \"OJPH_ENABLE_MODETEST\"")
+	else()
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOJPH_ENABLE_MODETEST")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOJPH_ENABLE_MODETEST")
+	endif()
 endif()
 
 if (OJPH_DISABLE_INTEL_SIMD)
@@ -215,8 +227,37 @@ if(NOT OJPH_DISABLE_INTEL_SIMD)
   list(APPEND OJPH_COMPRESS ${OJPH_IMG_IO_AVX2})
 endif()
 
+if (OJPH_ENABLE_MODETEST)
+  # not used yet, cannot get this to work, using c files 
+  #ADD_LIBRARY(
+  #   modetest
+  #   /home/ubuntu/sandbox/htj2k/libdrm/tests/modetest/buffers.c
+  #   /home/ubuntu/sandbox/htj2k/libdrm/tests/modetest/cursor.c
+  #   /home/ubuntu/sandbox/htj2k/libdrm/tests/modetest/modetest.c
+  #)
+  #target_include_directories(modetest PUBLIC
+  #  /home/ubuntu/sandbox/htj2k/libdrm
+  #  /home/ubuntu/sandbox/htj2k/libdrm/include/drm
+  #  /home/ubuntu/sandbox/htj2k/libdrm/tests
+  #  /home/ubuntu/sandbox/htj2k/libdrm/tests/util)
+endif()
+
+if (OJPH_ENABLE_MODETEST)
+  list(APPEND OJPH_EXPAND /home/ubuntu/sandbox/htj2k/libdrm/tests/modetest/buffers.c)
+  list(APPEND OJPH_EXPAND /home/ubuntu/sandbox/htj2k/libdrm/tests/modetest/cursor.c)
+  list(APPEND OJPH_EXPAND /home/ubuntu/sandbox/htj2k/libdrm/tests/modetest/modetest.c)
+endif()
+
 add_executable(ojph_expand ${OJPH_EXPAND} ${SOURCES} ${CODESTREAM} ${CODING} ${TRANSFORM})
 add_executable(ojph_compress ${OJPH_COMPRESS})
+
+if (OJPH_ENABLE_MODETEST)
+  target_include_directories(ojph_expand PUBLIC /home/ubuntu/sandbox/htj2k/libdrm/tests/modetest
+    /home/ubuntu/sandbox/htj2k/libdrm
+    /home/ubuntu/sandbox/htj2k/libdrm/include/drm
+    /home/ubuntu/sandbox/htj2k/libdrm/tests
+    /home/ubuntu/sandbox/htj2k/libdrm/tests/util)
+endif()
 
 if (MSVC)
   set_source_files_properties(src/apps/others/ojph_img_io_avx2.cpp PROPERTIES COMPILE_FLAGS "/arch:AVX2")
@@ -225,7 +266,22 @@ set_source_files_properties(src/apps/others/ojph_img_io_sse41.cpp PROPERTIES COM
 set_source_files_properties(src/apps/others/ojph_img_io_avx2.cpp PROPERTIES COMPILE_FLAGS -mavx2)
 endif()
 
-if( USE_TIFF )
+# LEON
+if (OJPH_ENABLE_MODETEST)
+add_library(libutil STATIC IMPORTED)
+set_target_properties(libutil PROPERTIES IMPORTED_LOCATION /home/ubuntu/sandbox/htj2k/libdrm/tests/util/.libs/libutil.a)
+set_target_properties(libutil PROPERTIES INTERFACE_INCLUDE_DIRECTORIES /home/ubuntu/sandbox/htj2k/libdrm/tests/util)
+
+add_library(libdrm SHARED IMPORTED)
+set_target_properties(libdrm PROPERTIES IMPORTED_LOCATION /home/ubuntu/sandbox/htj2k/libdrm/.libs/libdrm.so)
+set_target_properties(libdrm PROPERTIES INTERFACE_INCLUDE_DIRECTORIES /home/ubuntu/sandbox/htj2k/libdrm/include/drm)
+endif()
+
+# @TODO this is not mutually exclusive with USE_TIFF
+if (OJPH_ENABLE_MODETEST)
+  target_link_libraries(ojph_expand openjph libutil libdrm)
+  target_link_libraries(ojph_compress openjph)
+elseif( USE_TIFF )
   target_link_libraries(ojph_expand openjph ${TIFF_LIBRARIES})
   target_link_libraries(ojph_compress openjph ${TIFF_LIBRARIES})
 else()

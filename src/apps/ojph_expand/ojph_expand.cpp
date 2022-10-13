@@ -47,6 +47,13 @@
 #include "ojph_params.h"
 #include "ojph_message.h"
 
+#ifdef OJPH_ENABLE_MODETEST
+extern "C" {
+#include "modetest.h"
+#include "unistd.h"
+}
+#endif
+
 /////////////////////////////////////////////////////////////////////////////
 struct ui32_list_interpreter : public ojph::cli_interpreter::arg_inter_base
 {
@@ -143,50 +150,30 @@ const char* get_file_extension(const char* filename)
   return p;
 }
 
-/////////////////////////////////////////////////////////////////////////////
-int main(int argc, char *argv[]) {
+struct thread_args {
+  char *input_filename;
+  char *output_filename;
+  ojph::ui32 skipped_res_for_read;
+  ojph::ui32 skipped_res_for_recon;
+  bool resilient;
+  void *yu12_dec;
+};
 
-  char *input_filename = NULL;
-  char *output_filename = NULL;
-  ojph::ui32 skipped_res_for_read = 0;
-  ojph::ui32 skipped_res_for_recon = 0;
-  bool resilient = false;
-
-  if (argc <= 1) {
-    std::cout <<
-    "\nThe following arguments are necessary:\n"
-    " -i input file name\n"
-#ifdef OJPH_ENABLE_TIFF_SUPPORT
-    " -o output file name (either pgm, ppm, tif(f), or raw(yuv))\n\n"
-#else
-    " -o output file name (either pgm, ppm, or raw(yuv))\n\n"
-#endif // !OJPH_ENABLE_TIFF_SUPPORT
-    "The following arguments are options:\n"
-    " -skip_res  x,y a comma-separated list of two elements containing the\n"
-    "            number of resolutions to skip. You can specify 1 or 2\n"
-    "            parameters; the first specifies the number of resolution\n"
-    "            for which data reading is skipped. The second is the\n"
-    "            number of skipped resolution for reconstruction, which is\n"
-    "            either equal to the first or smaller. If the second is not\n"
-    "            specified, it is made to equal to the first.\n"
-    " -resilient true if you want the decoder to be more tolerant of errors\n"
-    "            in the codestream\n\n"
-    ;
-    return -1;
-  }
-  if (!get_arguments(argc, argv, input_filename, output_filename,
-                     skipped_res_for_read, skipped_res_for_recon,
-                     resilient))
+int work(void *ptr)
+{
+  // cast type
+  struct thread_args *args = (struct thread_args *)ptr;
+  char *input_filename = args->input_filename;
+  char *output_filename = args->output_filename;
+  ojph::ui32 skipped_res_for_read = args->skipped_res_for_read;
+  ojph::ui32 skipped_res_for_recon = args->skipped_res_for_recon;
+  bool resilient = args->resilient;
+  void *yu12_dec = args->yu12_dec;
+  try
   {
-    return -1;
-  }
-
-  clock_t begin = clock();
-
-  try {
     if (output_filename == NULL)
       OJPH_ERROR(0x020000008,
-                 "Please provide and output file using the -o option\n");
+                  "Please provide and output file using the -o option\n");
 
     ojph::j2c_infile j2c_file;
     j2c_file.open(input_filename);
@@ -298,8 +285,10 @@ int main(int argc, char *argv[]) {
         }
         codestream.set_planar(true);
         yuv.configure(max_bit_depth, siz.get_num_components(), comp_widths);
+#ifdef OJPH_ENABLE_MODETEST
         yuv.open(output_filename);
         base = &yuv;
+#endif
       }
       else
 #ifdef OJPH_ENABLE_TIFF_SUPPORT
@@ -320,16 +309,46 @@ int main(int argc, char *argv[]) {
 
     if (codestream.is_planar())
     {
+      //printf("planar\n");
       ojph::param_siz siz = codestream.access_siz();
       for (ojph::ui32 c = 0; c < siz.get_num_components(); ++c)
       {
+        ojph::ui32 width = siz.get_recon_width(c);
         ojph::ui32 height = siz.get_recon_height(c);
-        for (ojph::ui32 i = height; i > 0; --i)
+        for (ojph::ui32 hh = 0; hh < height; hh++)
         {
           ojph::ui32 comp_num;
           ojph::line_buf *line = codestream.pull(comp_num);
           assert(comp_num == c);
-          base->write(line, comp_num);
+
+#ifdef OJPH_ENABLE_MODETEST
+          // LEON
+          if (1)
+          {
+            if (yu12_dec != NULL)
+            {
+              int stride = (c == 0)? 2048: 1024;
+              int ww = width;
+              int offset = (c > 0) * (2048 * 1080 + ((c - 1) * 1024 * 540));
+              offset += hh * stride;
+              uint8_t *dp = (uint8_t *)yu12_dec + offset;
+              //if (hh < 2) printf("height = %d, c = %d, hh = %d, offset = %d, width = %d, stride = %d\n", height, c, hh, offset, width, stride);
+              //printf("dp = %p\n", dp);
+              //printf("hh = %d\n", hh);
+              const int32_t *sp = line->i32;
+              //printf("w = %d\n", w);
+              for (uint32_t i = 0; i < ww; i = i + 1)
+              {
+                int val = *sp++;
+                val = val >= 0 ? val : 0;
+                val = val <= 255 ? val : 255;
+                *dp++ = (uint8_t)val;
+              }
+            }
+          }
+#else          
+          //base->write(line, comp_num);
+#endif
         }
       }
     }
@@ -345,11 +364,14 @@ int main(int argc, char *argv[]) {
           ojph::line_buf *line = codestream.pull(comp_num);
           assert(comp_num == c);
           base->write(line, comp_num);
+            printf("c=%u, l=%u\n", (unsigned int)c, (unsigned int)i);
         }
       }
     }
 
+#ifndef OJPH_ENABLE_MODETEST
     base->close();
+#endif
     codestream.close();
   }
   catch (const std::exception& e)
@@ -359,10 +381,316 @@ int main(int argc, char *argv[]) {
       printf("%s\n", p);
     exit(-1);
   }
+}
+
+/////////////////////////////////////////////////////////////////////////////
+int main(int argc, char *argv[]) {
+
+  char *input_filename = NULL;
+  char *output_filename = NULL;
+  ojph::ui32 skipped_res_for_read = 0;
+  ojph::ui32 skipped_res_for_recon = 0;
+  bool resilient = false;
+
+  if (argc <= 1) {
+    std::cout <<
+    "\nThe following arguments are necessary:\n"
+    " -i input file name\n"
+#ifdef OJPH_ENABLE_TIFF_SUPPORT
+    " -o output file name (either pgm, ppm, tif(f), or raw(yuv))\n\n"
+#else
+    " -o output file name (either pgm, ppm, or raw(yuv))\n\n"
+#endif // !OJPH_ENABLE_TIFF_SUPPORT
+    "The following arguments are options:\n"
+    " -skip_res  x,y a comma-separated list of two elements containing the\n"
+    "            number of resolutions to skip. You can specify 1 or 2\n"
+    "            parameters; the first specifies the number of resolution\n"
+    "            for which data reading is skipped. The second is the\n"
+    "            number of skipped resolution for reconstruction, which is\n"
+    "            either equal to the first or smaller. If the second is not\n"
+    "            specified, it is made to equal to the first.\n"
+    " -resilient true if you want the decoder to be more tolerant of errors\n"
+    "            in the codestream\n\n"
+    ;
+    return -1;
+  }
+  if (!get_arguments(argc, argv, input_filename, output_filename,
+                     skipped_res_for_read, skipped_res_for_recon,
+                     resilient))
+  {
+    return -1;
+  }
+
+#ifdef OJPH_ENABLE_MODETEST
+  void *yu12 = NULL;
+  void *state = NULL;
+  
+  state = hardcoded_setup(&yu12);
+  printf("ojph_expand state = %p, YU12 = %p\n", state, yu12);
+#define YU12_HD_SIZE (2048 * 1080 * 3 / 2)
+  void *yu12_dec = malloc(YU12_HD_SIZE);
+#else
+#error DOJPH_ENABLE_MODETEST not set
+#endif
+
+
+  int is_seq = 0;
+  int frame_num = 0;
+  // assume input filename is a sequence [0-..] if % formatter is present
+  // use sane formatters, such as %d, %03d
+  is_seq = !!strstr(input_filename, "%");
+  char *input_filename_original = strdup(input_filename);
+  if (is_seq) {
+    printf("% detected in input filename, assuming a sequence\n");
+  }
+
+  while (1) {
+
+  clock_t begin = clock();
+
+  if (is_seq)
+  {
+    char input_filename_sequence[512];
+    int cnt = snprintf(input_filename_sequence, 510, input_filename_original, frame_num);
+    //printf("input_filename = %s\n", input_filename);
+    //printf("input_filename_sequence = %s\n", input_filename_sequence);
+    strcpy(input_filename, input_filename_sequence);
+  }
+
+  try
+  {
+    if (output_filename == NULL)
+      OJPH_ERROR(0x020000008,
+                  "Please provide and output file using the -o option\n");
+
+    ojph::j2c_infile j2c_file;
+    j2c_file.open(input_filename);
+    ojph::codestream codestream;
+
+    ojph::ppm_out ppm;
+    #ifdef OJPH_ENABLE_TIFF_SUPPORT
+    ojph::tif_out tif;
+    #endif /* OJPH_ENABLE_TIFF_SUPPORT */
+    ojph::yuv_out yuv;
+    ojph::image_out_base *base = NULL;
+    const char *v = get_file_extension(output_filename);
+    if (v)
+    {
+      if (resilient)
+        codestream.enable_resilience();
+      codestream.read_headers(&j2c_file);
+      codestream.restrict_input_resolution(skipped_res_for_read, 
+        skipped_res_for_recon);
+      ojph::param_siz siz = codestream.access_siz();
+
+      if (strncmp(".pgm", v, 4) == 0)
+      {
+
+        if (siz.get_num_components() != 1)
+          OJPH_ERROR(0x020000001,
+            "The file has more than one color component, but .pgm can "
+            "contain only on color component\n");
+        ppm.configure(siz.get_recon_width(0), siz.get_recon_height(0),
+                      siz.get_num_components(), siz.get_bit_depth(0));
+        ppm.open(output_filename);
+        base = &ppm;
+      }
+      else if (strncmp(".ppm", v, 4) == 0)
+      {
+        codestream.set_planar(false);
+        ojph::param_siz siz = codestream.access_siz();
+
+        if (siz.get_num_components() != 3)
+          OJPH_ERROR(0x020000002,
+            "The file has %d color components; this cannot be saved to"
+            " a .ppm file\n", siz.get_num_components());
+        bool all_same = true;
+        ojph::point p = siz.get_downsampling(0);
+        for (ojph::ui32 i = 1; i < siz.get_num_components(); ++i)
+        {
+          ojph::point p1 = siz.get_downsampling(i);
+          all_same = all_same && (p1.x == p.x) && (p1.y == p.y);
+        }
+        if (!all_same)
+          OJPH_ERROR(0x020000003,
+            "To save an image to ppm, all the components must have the "
+            "downsampling ratio\n");
+        ppm.configure(siz.get_recon_width(0), siz.get_recon_height(0),
+                      siz.get_num_components(), siz.get_bit_depth(0));
+        ppm.open(output_filename);
+        base = &ppm;
+      }
+#ifdef OJPH_ENABLE_TIFF_SUPPORT
+      else if (strncmp(".tif", v, 4) == 0 || strncmp(".tiff", v, 5) == 0)
+      {
+        codestream.set_planar(false);
+        ojph::param_siz siz = codestream.access_siz();
+
+        bool all_same = true;
+        ojph::point p = siz.get_downsampling(0);
+        for (unsigned int i = 1; i < siz.get_num_components(); ++i)
+        {
+          ojph::point p1 = siz.get_downsampling(i);
+          all_same = all_same && (p1.x == p.x) && (p1.y == p.y);
+        }
+        if (!all_same)
+          OJPH_ERROR(0x020000008,
+            "To save an image to tif(f), all the components must have the "
+            "downsampling ratio\n");
+        ojph::ui32 bit_depths[4] = { 0, 0, 0, 0 };
+        for (ojph::ui32 c = 0; c < siz.get_num_components(); c++)
+        {
+          bit_depths[c] = siz.get_bit_depth(c);
+        }
+        tif.configure(siz.get_recon_width(0), siz.get_recon_height(0),
+          siz.get_num_components(), bit_depths);
+        tif.open(output_filename);
+        base = &tif;
+      }
+#endif // !OJPH_ENABLE_TIFF_SUPPORT
+      else if (strncmp(".yuv", v, 4) == 0 || strncmp(".raw", v, 4) == 0)
+      {
+        codestream.set_planar(true);
+        ojph::param_siz siz = codestream.access_siz();
+
+        if (siz.get_num_components() != 3 && siz.get_num_components() != 1)
+          OJPH_ERROR(0x020000004,
+            "The file has %d color components; this cannot be saved to"
+             " .raw(yuv) file\n", siz.get_num_components());
+        ojph::param_cod cod = codestream.access_cod();
+        if (cod.is_using_color_transform())
+          OJPH_ERROR(0x020000005,
+            "The current implementation of raw(yuv) file object does not"
+            " support saving file when conversion from raw(yuv) to rgb is"
+            " needed; in any case, this is not the normal usage of raw(yuv)"
+            "file.");
+        ojph::ui32 comp_widths[3];
+        ojph::ui32 max_bit_depth = 0;
+        for (ojph::ui32 i = 0; i < siz.get_num_components(); ++i)
+        {
+          comp_widths[i] = siz.get_recon_width(i);
+          max_bit_depth = ojph_max(max_bit_depth, siz.get_bit_depth(i));
+        }
+        codestream.set_planar(true);
+        yuv.configure(max_bit_depth, siz.get_num_components(), comp_widths);
+#ifdef OJPH_ENABLE_MODETEST
+        yuv.open(output_filename);
+        base = &yuv;
+#endif
+      }
+      else
+#ifdef OJPH_ENABLE_TIFF_SUPPORT
+        OJPH_ERROR(0x020000006,
+          "unknown output file extension; only pgm, ppm, tif(f) and raw(yuv))"
+          " are supported\n");
+#else
+        OJPH_ERROR(0x020000006,
+          "unknown output file extension; only pgm, ppm, and raw(yuv) are"
+          " supported\n");
+#endif // !OJPH_ENABLE_TIFF_SUPPORT
+    }
+    else
+      OJPH_ERROR(0x020000007,
+        "Please supply a proper output filename with a proper extension\n");
+
+    codestream.create();
+
+    if (codestream.is_planar())
+    {
+      //printf("planar\n");
+      ojph::param_siz siz = codestream.access_siz();
+      for (ojph::ui32 c = 0; c < siz.get_num_components(); ++c)
+      {
+        ojph::ui32 width = siz.get_recon_width(c);
+        ojph::ui32 height = siz.get_recon_height(c);
+        for (ojph::ui32 hh = 0; hh < height; hh++)
+        {
+          ojph::ui32 comp_num;
+          ojph::line_buf *line = codestream.pull(comp_num);
+          assert(comp_num == c);
+
+#ifdef OJPH_ENABLE_MODETEST
+          // LEON
+          if (1)
+          {
+            if (yu12_dec != NULL)
+            {
+              int stride = (c == 0)? 2048: 1024;
+              int ww = width;
+              int offset = (c > 0) * (2048 * 1080 + ((c - 1) * 1024 * 540));
+              offset += hh * stride;
+              uint8_t *dp = (uint8_t *)yu12_dec + offset;
+              //if (hh < 2) printf("height = %d, c = %d, hh = %d, offset = %d, width = %d, stride = %d\n", height, c, hh, offset, width, stride);
+              //printf("dp = %p\n", dp);
+              //printf("hh = %d\n", hh);
+              const int32_t *sp = line->i32;
+              //printf("w = %d\n", w);
+              for (uint32_t i = 0; i < ww; i = i + 1)
+              {
+                int val = *sp++;
+                val = val >= 0 ? val : 0;
+                val = val <= 255 ? val : 255;
+                *dp++ = (uint8_t)val;
+              }
+            }
+          }
+#else          
+          //base->write(line, comp_num);
+#endif
+        }
+      }
+    }
+    else
+    {
+      ojph::param_siz siz = codestream.access_siz();
+      ojph::ui32 height = siz.get_recon_height(0);
+      for (ojph::ui32 i = 0; i < height; ++i)
+      {
+        for (ojph::ui32 c = 0; c < siz.get_num_components(); ++c)
+        {
+          ojph::ui32 comp_num;
+          ojph::line_buf *line = codestream.pull(comp_num);
+          assert(comp_num == c);
+          base->write(line, comp_num);
+            printf("c=%u, l=%u\n", (unsigned int)c, (unsigned int)i);
+        }
+      }
+    }
+
+#ifndef OJPH_ENABLE_MODETEST
+    base->close();
+#endif
+    codestream.close();
+  }
+  catch (const std::exception& e)
+  {
+    const char *p = e.what();
+    if (strncmp(p, "ojph error", 10) != 0)
+      printf("%s\n", p);
+    exit(-1);
+  }
+  if (1) {
+    memcpy(yu12, yu12_dec, YU12_HD_SIZE);
+  } else if (1) {
+    uint8_t *src = (uint8_t *)yu12_dec;
+    uint8_t *dst = (uint8_t *)yu12;
+    for (int i = 0; i < 1080; i++, src+= 2048, dst+=2048)
+    {
+      memcpy(dst, src, 1920);
+    }
+  }
 
   clock_t end = clock();
   double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
   printf("Elapsed time = %f\n", elapsed_secs);
+  frame_num += 1;
+  } // while
+#ifdef OJPH_ENABLE_MODETEST
+  printf("state = %p\n", state);
+  teardown(state);
+#else
+#error DOJPH_ENABLE_MODETEST not set
+#endif  
 
   return 0;
-}
+  }
