@@ -429,10 +429,7 @@ int main(int argc, char *argv[]) {
   printf("ojph_expand state = %p, YU12 = %p\n", state, yu12);
 #define YU12_HD_SIZE (2048 * 1080 * 3 / 2)
   void *yu12_dec = malloc(YU12_HD_SIZE);
-#else
-#error DOJPH_ENABLE_MODETEST not set
 #endif
-
 
   int is_seq = 0;
   int frame_num = 0;
@@ -669,6 +666,8 @@ int main(int argc, char *argv[]) {
       printf("%s\n", p);
     exit(-1);
   }
+
+#ifdef OJPH_ENABLE_MODETEST
   if (1) {
     memcpy(yu12, yu12_dec, YU12_HD_SIZE);
   } else if (1) {
@@ -679,6 +678,7 @@ int main(int argc, char *argv[]) {
       memcpy(dst, src, 1920);
     }
   }
+#endif
 
   clock_t end = clock();
   double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
@@ -688,8 +688,6 @@ int main(int argc, char *argv[]) {
 #ifdef OJPH_ENABLE_MODETEST
   printf("state = %p\n", state);
   teardown(state);
-#else
-#error DOJPH_ENABLE_MODETEST not set
 #endif  
 
   return 0;

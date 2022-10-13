@@ -19,8 +19,8 @@ set -e
 
 #exit
 
-#rm -rf build
-#cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+rm -rf build
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
 make -C build -j4
 make -C build -j4 install DESTDIR=/tmp/
 
