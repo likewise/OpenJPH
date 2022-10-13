@@ -3910,7 +3910,7 @@ namespace ojph {
         blocks[i].pull_line(lines + 0);
       }
 
-#if 1
+#if 0
       printf("subband::pull_line() cur_cb_row = %u, line_num = %u, res_num = %u, band_num =%u, comp_num =%u, (%u,%u) (+%u, +%u)\n",
         cur_cb_row - 1, line_num, res_num, band_num, comp_num, band_rect.org.x, band_rect.org.y, band_rect.siz.w, band_rect.siz.h);
 #endif
