@@ -25,10 +25,11 @@ set(OPENJPH_VERSION_PATCH ${CMAKE_MATCH_1})
 set(OPENJPH_VERSION "${OPENJPH_VERSION_MAJOR}.${OPENJPH_VERSION_MINOR}.${OPENJPH_VERSION_PATCH}")
 ############################################################
 
-option(OJPH_DISABLE_INTEL_SIMD "Disables the use of SIMD instructions and associated files" OFF)
-option(BUILD_SHARED_LIBS "Shared Libraries" ON)
-option(OJPH_ENABLE_TIFF_SUPPORT "Enables input and output support for TIFF files" ON)
+option(OJPH_DISABLE_INTEL_SIMD "Disables the use of SIMD instructions and associated files" ON)
+option(BUILD_SHARED_LIBS "Shared Libraries" OFF)
+option(OJPH_ENABLE_TIFF_SUPPORT "Enables input and output support for TIFF files" OFF)
 option(OJPH_BUILD_TEST "Enables building test code" OFF)
+
 
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release")
@@ -48,6 +49,14 @@ if (OJPH_DISABLE_INTEL_SIMD)
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D \"OJPH_DISABLE_INTEL_SIMD\"")
 	else()
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOJPH_DISABLE_INTEL_SIMD")
+	endif()
+endif()
+
+if (OJPH_NOP_BWD_TRANSFORMS)
+	if (MSVC)
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D \"OJPH_NOP_BWD_TRANSFORMS\"")
+	else()
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOJPH_NOP_BWD_TRANSFORMS")
 	endif()
 endif()
 
@@ -103,12 +112,13 @@ if(EMSCRIPTEN)
   set(OJPH_DISABLE_INTEL_SIMD ON)
   set(BUILD_SHARED_LIBS OFF)
   set(OJPH_ENABLE_TIFF_SUPPORT OFF)
-  add_compile_options(-std=c++11 -O3 -fexceptions -DOJPH_DISABLE_INTEL_SIMD)
+  add_compile_options(-std=c++11 -O3 -fexceptions -DOJPH_DISABLE_INTEL_SIMD -pg)
   add_library(openjph ${SOURCES})
   add_library(openjphsimd ${SOURCES} ${CODESTREAM_WASM} ${CODING_WASM} ${TRANSFORM_WASM})
   target_include_directories(openjph PUBLIC src/core/common)
   target_include_directories(openjphsimd PUBLIC src/core/common)
-  target_compile_options(openjphsimd PRIVATE -DOJPH_ENABLE_WASM_SIMD -msimd128)
+  target_compile_options(openjph PRIVATE -pg)
+  target_compile_options(openjphsimd PRIVATE -DOJPH_ENABLE_WASM_SIMD -msimd128 -pg)
   source_group("codestream" FILES ${CODESTREAM_WASM})
   source_group("coding" FILES ${CODING_WASM})
   source_group("transform" FILES ${TRANSFORM_WASM})
@@ -205,7 +215,7 @@ if(NOT OJPH_DISABLE_INTEL_SIMD)
   list(APPEND OJPH_COMPRESS ${OJPH_IMG_IO_AVX2})
 endif()
 
-add_executable(ojph_expand ${OJPH_EXPAND})
+add_executable(ojph_expand ${OJPH_EXPAND} ${SOURCES} ${CODESTREAM} ${CODING} ${TRANSFORM})
 add_executable(ojph_compress ${OJPH_COMPRESS})
 
 if (MSVC)
@@ -222,6 +232,12 @@ else()
   target_link_libraries(ojph_expand openjph)
   target_link_libraries(ojph_compress openjph)
 endif()
+
+target_compile_options(ojph_expand PRIVATE -pg)
+target_link_options(ojph_expand PRIVATE -pg)
+#target_compile_options(openjph PRIVATE -pg)
+#target_link_options(openjpg PRIVATE -pg)
+
 
 
 ################################################################################################
