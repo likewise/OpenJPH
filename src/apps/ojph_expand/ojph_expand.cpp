@@ -662,9 +662,11 @@ int main(int argc, char *argv[]) {
   catch (const std::exception& e)
   {
     const char *p = e.what();
+    printf("%d\n", e);
     if (strncmp(p, "ojph error", 10) != 0)
       printf("%s\n", p);
-    exit(-1);
+    //exit(-1);
+    frame_num = 0;
   }
 
 #ifdef OJPH_ENABLE_MODETEST

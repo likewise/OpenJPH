@@ -1,5 +1,8 @@
 set -e
 
+# Decode and display one frame, or a sequence of frames (using %d in input name).
+# Targetting Kria
+
 # wget http://ultravideo.fi/video/Beauty_1920x1080_120fps_420_8bit_YUV_RAW.7z
 # 7z e Beauty_1920x1080_120fps_420_8bit_YUV_RAW.7z
 
@@ -31,8 +34,9 @@ rm -f /tmp/freqfile.yuv
 export LD_LIBRARY_PATH=/tmp/usr/local/lib/
 BEGIN_NS=`date +%s%N`
 
-ls -ald $INPUT.ojh || true
+#ls -ald $INPUT.ojh || true
 
+# Start FPGA/SoC implementation of HTJ2K decoder
 /tmp/usr/local/bin/ojph_expand -i $INPUT -o /tmp/x.yuv
 
 END_NS=`date +%s%N`

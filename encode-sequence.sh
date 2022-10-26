@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# This compresses a list of YUV files into a sequence of consecutively numbered
+# OJH bitstream files, on per file.
+
 set -e
 
 # wget http://ultravideo.fi/video/Beauty_1920x1080_120fps_420_8bit_YUV_RAW.7z
